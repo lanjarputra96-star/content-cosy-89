@@ -214,7 +214,9 @@ export function EcoApp() {
                 const i = items.findIndex((x) => x.id === id);
                 const j = i + dir;
                 if (j < 0 || j >= items.length) return d;
-                [items[i], items[j]] = [items[j], items[i]];
+                const tmp = items[i]!;
+                items[i] = items[j]!;
+                items[j] = tmp;
                 return { ...d, [tab]: { ...d[tab], items } };
               })
             }
@@ -724,8 +726,8 @@ function SettingsModal({ data, onClose, update, setData, reset }: {
             className="space-y-3 pt-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (pass.length < 6) return toast.error("Password minimal 6 karakter!");
-              if (pass !== pass2) return toast.error("Konfirmasi password tidak sama");
+              if (pass.length < 6) { toast.error("Password minimal 6 karakter!"); return; }
+              if (pass !== pass2) { toast.error("Konfirmasi password tidak sama"); return; }
               update((d) => ({ ...d, credentials: { username: user.trim(), password: pass } }));
               setPass(""); setPass2("");
               toast.success("Kredensial Admin berhasil diperbarui!");
