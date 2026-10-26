@@ -22,7 +22,7 @@ export const toneOptions: { value: Tone; label: string }[] = [
 ];
 
 export function Modal({ open, onClose, title, description, children, wide }: {
-  open: boolean; onClose: () => void; title: string; description?: string; children: ReactNode; wide?: boolean;
+  open: boolean; onClose: () => void; title: string; description?: string | undefined; children: ReactNode; wide?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
