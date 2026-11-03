@@ -11,6 +11,8 @@ export interface SectionItem {
   infoLabel: string;
   infoValue: string;
   tone: Tone;
+  /** Tanggal pencatatan (YYYY-MM-DD) untuk laporan & filter rentang tanggal. */
+  date?: string;
 }
 
 export interface Section {
