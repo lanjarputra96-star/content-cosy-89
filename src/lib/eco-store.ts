@@ -11,6 +11,8 @@ export interface SectionItem {
   infoLabel: string;
   infoValue: string;
   tone: Tone;
+  /** Tanggal pencatatan (YYYY-MM-DD) untuk laporan & filter rentang tanggal. */
+  date?: string;
 }
 
 export interface Section {
@@ -117,27 +119,27 @@ export const defaultData: EcoData = {
     title: "Log Pengelolaan Sampah Harian",
     subtitle: "Pencatatan volume dan kategori pemilahan sampah di lingkungan sekolah",
     items: [
-      { id: "w1", image: u("photo-1585320806297-9794b3e4eeae"), badge: "Organik", title: "Pengomposan Daun & Sisa Makanan", desc: "Diolah menjadi pupuk kompos padat dan cair untuk menyuburkan taman dan kebun sekolah SDN 1 Palapa.", infoLabel: "Terkumpul", infoValue: "68.5 Kg", tone: "green" },
-      { id: "w2", image: u("photo-1532996122724-e3c354a0b15b"), badge: "Anorganik / Daur Ulang", title: "Bank Sampah & Kerajinan", desc: "Botol plastik dan kertas dipilah dan disetorkan ke bank sampah atau diolah menjadi kerajinan kreatif.", infoLabel: "Terkumpul", infoValue: "45.0 Kg", tone: "amber" },
-      { id: "w3", image: u("photo-1611284446314-60a58ac0deb9"), badge: "Residu", title: "Penanganan Residu & Pembuangan", desc: "Sampah yang tidak dapat didaur ulang dikelola melalui Tempat Pembuangan Akhir secara terstruktur.", infoLabel: "Terkumpul", infoValue: "31.5 Kg", tone: "rose" },
+      { id: "w1", date: "2026-10-20", image: u("photo-1585320806297-9794b3e4eeae"), badge: "Organik", title: "Pengomposan Daun & Sisa Makanan", desc: "Diolah menjadi pupuk kompos padat dan cair untuk menyuburkan taman dan kebun sekolah SDN 1 Palapa.", infoLabel: "Terkumpul", infoValue: "68.5 Kg", tone: "green" },
+      { id: "w2", date: "2026-10-27", image: u("photo-1532996122724-e3c354a0b15b"), badge: "Anorganik / Daur Ulang", title: "Bank Sampah & Kerajinan", desc: "Botol plastik dan kertas dipilah dan disetorkan ke bank sampah atau diolah menjadi kerajinan kreatif.", infoLabel: "Terkumpul", infoValue: "45.0 Kg", tone: "amber" },
+      { id: "w3", date: "2026-10-30", image: u("photo-1611284446314-60a58ac0deb9"), badge: "Residu", title: "Penanganan Residu & Pembuangan", desc: "Sampah yang tidak dapat didaur ulang dikelola melalui Tempat Pembuangan Akhir secara terstruktur.", infoLabel: "Terkumpul", infoValue: "31.5 Kg", tone: "rose" },
     ],
   },
   water: {
     title: "Konservasi Air & Biopori",
     subtitle: "Pemantauan titik resapan air hujan dan pemeliharaan saluran drainase sekolah",
     items: [
-      { id: "a1", image: u("photo-1544816155-12df9643f363"), badge: "Resapan", title: "Lubang Resapan Biopori", desc: "Pembuatan dan perawatan 24 titik lubang biopori di sekitar taman sekolah untuk mencegah genangan dan menyuburkan tanah.", infoLabel: "Status", infoValue: "24 Titik Aktif & Dirawat", tone: "sky" },
-      { id: "a2", image: u("photo-1518837695005-2083093ee35b"), badge: "Hujan", title: "Pemanenan Air Hujan", desc: "Sistem penampungan air hujan dari atap gedung sekolah yang digunakan kembali untuk menyiram tanaman.", infoLabel: "Kapasitas Tangki", infoValue: "1.000 Liter", tone: "sky" },
-      { id: "a3", image: u("photo-1509391365360-2e959784a276"), badge: "Drainase", title: "Kebersihan Saluran Air", desc: "Pembersihan saluran air dan got sekolah secara berkala oleh siswa dan petugas kebersihan sekolah.", infoLabel: "Jadwal", infoValue: "Pembersihan Mingguan", tone: "sky" },
+      { id: "a1", date: "2026-10-18", image: u("photo-1544816155-12df9643f363"), badge: "Resapan", title: "Lubang Resapan Biopori", desc: "Pembuatan dan perawatan 24 titik lubang biopori di sekitar taman sekolah untuk mencegah genangan dan menyuburkan tanah.", infoLabel: "Status", infoValue: "24 Titik Aktif & Dirawat", tone: "sky" },
+      { id: "a2", date: "2026-10-22", image: u("photo-1518837695005-2083093ee35b"), badge: "Hujan", title: "Pemanenan Air Hujan", desc: "Sistem penampungan air hujan dari atap gedung sekolah yang digunakan kembali untuk menyiram tanaman.", infoLabel: "Kapasitas Tangki", infoValue: "1.000 Liter", tone: "sky" },
+      { id: "a3", date: "2026-10-29", image: u("photo-1509391365360-2e959784a276"), badge: "Drainase", title: "Kebersihan Saluran Air", desc: "Pembersihan saluran air dan got sekolah secara berkala oleh siswa dan petugas kebersihan sekolah.", infoLabel: "Jadwal", infoValue: "Pembersihan Mingguan", tone: "sky" },
     ],
   },
   activities: {
     title: "Agenda Aksi Hijau & Relawan",
     subtitle: "Jadwal kegiatan jumat bersih, perawatan taman, dan patroli lingkungan siswa SDN 1 Palapa",
     items: [
-      { id: "k1", image: u("photo-1581092160607-ee22621dd758"), badge: "Mingguan", title: "Jumat Bersih & Pemilahan Sampah", desc: "Kegiatan gotong royong seluruh siswa kelas 3C membersihkan lingkungan kelas dan memilah sampah.", infoLabel: "Setiap Jumat 07.30", infoValue: "Aktif", tone: "green" },
-      { id: "k2", image: u("photo-1592417817098-8f3d691a4bf5"), badge: "Rutin", title: "Patroli Tanaman & Perawatan TOGA", desc: "Siswa piket merawat, menyiram, dan mencatat pertumbuhan tanaman obat keluarga di apotek hidup UKS.", infoLabel: "Selasa & Kamis", infoValue: "Aktif", tone: "green" },
-      { id: "k3", image: u("photo-1517486808906-6ca8b3f04846"), badge: "Bulanan", title: "Klub Eco-Hero & Daur Ulang", desc: "Pelatihan kreatif mengubah sampah botol plastik menjadi pot tanaman gantung dan hiasan kelas.", infoLabel: "Setiap Akhir Bulan", infoValue: "Aktif", tone: "green" },
+      { id: "k1", date: "2026-10-31", image: u("photo-1581092160607-ee22621dd758"), badge: "Mingguan", title: "Jumat Bersih & Pemilahan Sampah", desc: "Kegiatan gotong royong seluruh siswa kelas 3C membersihkan lingkungan kelas dan memilah sampah.", infoLabel: "Setiap Jumat 07.30", infoValue: "Aktif", tone: "green" },
+      { id: "k2", date: "2026-10-28", image: u("photo-1592417817098-8f3d691a4bf5"), badge: "Rutin", title: "Patroli Tanaman & Perawatan TOGA", desc: "Siswa piket merawat, menyiram, dan mencatat pertumbuhan tanaman obat keluarga di apotek hidup UKS.", infoLabel: "Selasa & Kamis", infoValue: "Aktif", tone: "green" },
+      { id: "k3", date: "2026-10-30", image: u("photo-1517486808906-6ca8b3f04846"), badge: "Bulanan", title: "Klub Eco-Hero & Daur Ulang", desc: "Pelatihan kreatif mengubah sampah botol plastik menjadi pot tanaman gantung dan hiasan kelas.", infoLabel: "Setiap Akhir Bulan", infoValue: "Aktif", tone: "green" },
     ],
   },
   credentials: { username: "admin", password: "palapa2026" },

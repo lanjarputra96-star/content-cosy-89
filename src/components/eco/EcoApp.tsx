@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { toast } from "sonner";
 import {
   ArrowDown, ArrowUp, CalendarDays, Camera, ChartPie, Clock, Download, Droplet, Eye, EyeOff, FileSpreadsheet,
-  Leaf, LogIn, LogOut, MapPin, Pencil, Plus, QrCode, Recycle, RotateCcw, Scale, Settings, ShieldCheck,
+  Leaf, LogIn, LogOut, MapPin, Pencil, Plus, Printer, QrCode, Recycle, RotateCcw, Scale, Settings, ShieldCheck,
   Sprout, Sun, Trash2, Trees, Upload, UserCheck, Users, Waves, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ import {
   defaultData, nextPlantCode, plantsToCsv, uid, useEcoStore,
   type EcoData, type Plant, type Section, type SectionItem, type Site, type Stat,
 } from "@/lib/eco-store";
+import {
+  buildReportHtml, defaultSelection, fmtID, reportCounts, rangeLabel,
+  type ReportRange, type ReportSelection,
+} from "@/lib/eco-report";
 import { Field, ImageField, Modal, selectCls, toneOptions, toneText } from "./fields";
 
 type SectionKey = "waste" | "water" | "activities";
@@ -46,6 +50,7 @@ export function EcoApp() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [statEdit, setStatEdit] = useState<Stat | null>(null);
   const [plantEdit, setPlantEdit] = useState<Plant | "new" | null>(null);
   const [plantDetail, setPlantDetail] = useState<Plant | null>(null);
@@ -90,6 +95,11 @@ export function EcoApp() {
               {isAdmin ? <UserCheck className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
               {isAdmin ? "Admin SDN 1 Palapa" : "Mode Publik"}
             </span>
+            {isAdmin && (
+              <Button size="sm" variant="glass" onClick={() => setReportOpen(true)}>
+                <Printer /> <span className="hidden sm:inline">Cetak Laporan</span>
+              </Button>
+            )}
             {isAdmin && (
               <Button size="sm" variant="glass" onClick={() => setSettingsOpen(true)}>
                 <Settings /> <span className="hidden sm:inline">Pengaturan</span>
@@ -296,6 +306,7 @@ export function EcoApp() {
         />
       )}
       {plantDetail && <PlantDetail plant={plantDetail} baseUrl={data.site.qrBaseUrl} onClose={() => setPlantDetail(null)} />}
+      {reportOpen && <ReportModal data={data} onClose={() => setReportOpen(false)} />}
     </div>
   );
 }
@@ -531,6 +542,9 @@ function SectionTab({ kind, section, isAdmin, onEditHead, onAdd, onEdit, onDelet
                   <span className="rounded bg-leaf px-2 py-0.5 text-[10px] font-medium text-leaf-foreground">{it.infoValue}</span>
                 </div>
               )}
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                <CalendarDays className="h-3 w-3 text-leaf" /> Dicatat: {it.date ? fmtID(it.date) : "tanpa tanggal"}
+              </div>
             </div>
           </div>
         ))}
@@ -546,8 +560,9 @@ const itemLabels: Record<SectionKey, { label: string; value: string }> = {
 };
 
 function ItemModal({ kind, item, onClose, onSave }: { kind: SectionKey; item: SectionItem | null; onClose: () => void; onSave: (i: SectionItem) => void }) {
+  const today = new Date().toISOString().slice(0, 10);
   const [f, setF] = useState<SectionItem>(
-    item ?? { id: uid(), image: "", badge: "", title: "", desc: "", infoLabel: "", infoValue: "", tone: kind === "water" ? "sky" : "green" },
+    item ?? { id: uid(), date: today, image: "", badge: "", title: "", desc: "", infoLabel: "", infoValue: "", tone: kind === "water" ? "sky" : "green" },
   );
   const set = <K extends keyof SectionItem>(k: K, v: SectionItem[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
@@ -557,6 +572,7 @@ function ItemModal({ kind, item, onClose, onSave }: { kind: SectionKey; item: Se
         <Field label="Judul *"><Input required value={f.title} onChange={(e) => set("title", e.target.value)} /></Field>
         <Field label="Deskripsi"><Textarea rows={3} value={f.desc} onChange={(e) => set("desc", e.target.value)} /></Field>
         <div className="grid grid-cols-2 gap-2">
+          <Field label="Tanggal pencatatan"><Input type="date" value={f.date ?? ""} onChange={(e) => set("date", e.target.value)} /></Field>
           <Field label="Label kecil / Kategori"><Input value={f.badge} onChange={(e) => set("badge", e.target.value)} /></Field>
           <Field label="Warna">
             <select className={selectCls} value={f.tone} onChange={(e) => set("tone", e.target.value as SectionItem["tone"])}>
@@ -790,6 +806,113 @@ function SettingsModal({ data, onClose, update, setData, reset }: {
           </div>
         </TabsContent>
       </Tabs>
+    </Modal>
+  );
+}
+
+/* ---------------- Laporan cetak ---------------- */
+
+function ReportModal({ data, onClose }: { data: EcoData; onClose: () => void }) {
+  const [sel, setSel] = useState<ReportSelection>(defaultSelection);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const range: ReportRange = { from, to };
+  const counts = useMemo(() => reportCounts(data, range), [data, from, to]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const shift = (days: number) => new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const presets: { label: string; from: string; to: string }[] = [
+    { label: "Semua tanggal", from: "", to: "" },
+    { label: "Hari ini", from: today, to: today },
+    { label: "7 hari terakhir", from: shift(6), to: today },
+    { label: "Bulan ini", from: `${today.slice(0, 7)}-01`, to: today },
+    {
+      label: "Bulan lalu",
+      from: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) + "-01"; })(),
+      to: (() => { const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10); })(),
+    },
+    { label: "Tahun ini", from: `${today.slice(0, 4)}-01-01`, to: `${today.slice(0, 4)}-12-31` },
+  ];
+
+  const options: { key: keyof ReportSelection; label: string; count: number | null }[] = [
+    { key: "summary", label: "Ringkasan Eco School", count: null },
+    { key: "plants", label: data.plantSection.title, count: counts.plants },
+    { key: "waste", label: data.waste.title, count: counts.waste },
+    { key: "water", label: data.water.title, count: counts.water },
+    { key: "activities", label: data.activities.title, count: counts.activities },
+  ];
+  const anySelected = Object.values(sel).some(Boolean);
+
+  const print = () => {
+    if (!anySelected) { toast.error("Pilih minimal satu jenis laporan."); return; }
+    if (from && to && from > to) { toast.error("Rentang tanggal tidak valid: awal melebihi akhir."); return; }
+    const html = buildReportHtml(data, sel, range, data.credentials.username);
+    const w = window.open("", "_blank", "width=1000,height=760");
+    if (!w) { toast.error("Popup diblokir browser. Izinkan popup untuk situs ini agar laporan bisa dicetak."); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Cetak Laporan" description="Pilih jenis laporan dan rentang tanggal, lalu cetak atau simpan sebagai PDF." wide>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold">Jenis laporan</Label>
+          {options.map((o) => (
+            <label key={o.key} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={sel[o.key]}
+                onChange={(e) => setSel({ ...sel, [o.key]: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <span className="flex-grow font-medium">{o.label}</span>
+              {o.count !== null && (
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-secondary-foreground">{o.count} data</span>
+              )}
+            </label>
+          ))}
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="secondary" onClick={() => setSel({ summary: true, plants: true, waste: true, water: true, activities: true })}>
+              Pilih semua
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSel({ summary: false, plants: false, waste: false, water: false, activities: false })}>
+              Kosongkan
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold">Rentang tanggal</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => { setFrom(p.from); setTo(p.to); }}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  from === p.from && to === p.to ? "border-leaf bg-tone-green-soft text-tone-green" : "border-border bg-muted hover:bg-secondary"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Dari tanggal"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+            <Field label="Sampai tanggal"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Periode terpilih: <strong>{rangeLabel(range)}</strong>. Tanaman difilter berdasarkan tanggal terakhir diperbarui; kartu sampah, air, dan kegiatan berdasarkan tanggal pencatatannya.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-border pt-3">
+          <Button type="button" variant="secondary" onClick={onClose}>Batal</Button>
+          <Button type="button" onClick={print}><Printer /> Cetak Laporan</Button>
+        </div>
+      </div>
     </Modal>
   );
 }
