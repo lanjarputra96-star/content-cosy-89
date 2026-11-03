@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { toast } from "sonner";
 import {
   ArrowDown, ArrowUp, CalendarDays, Camera, ChartPie, Clock, Download, Droplet, Eye, EyeOff, FileSpreadsheet,
-  Leaf, LogIn, LogOut, MapPin, Pencil, Plus, QrCode, Recycle, RotateCcw, Scale, Settings, ShieldCheck,
+  Leaf, LogIn, LogOut, MapPin, Pencil, Plus, Printer, QrCode, Recycle, RotateCcw, Scale, Settings, ShieldCheck,
   Sprout, Sun, Trash2, Trees, Upload, UserCheck, Users, Waves, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ import {
   defaultData, nextPlantCode, plantsToCsv, uid, useEcoStore,
   type EcoData, type Plant, type Section, type SectionItem, type Site, type Stat,
 } from "@/lib/eco-store";
+import {
+  buildReportHtml, defaultSelection, fmtID, reportCounts, rangeLabel,
+  type ReportRange, type ReportSelection,
+} from "@/lib/eco-report";
 import { Field, ImageField, Modal, selectCls, toneOptions, toneText } from "./fields";
 
 type SectionKey = "waste" | "water" | "activities";
@@ -46,6 +50,7 @@ export function EcoApp() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [coverOpen, setCoverOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [statEdit, setStatEdit] = useState<Stat | null>(null);
   const [plantEdit, setPlantEdit] = useState<Plant | "new" | null>(null);
   const [plantDetail, setPlantDetail] = useState<Plant | null>(null);
@@ -86,10 +91,11 @@ export function EcoApp() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1.5 text-xs font-medium sm:inline-flex">
-              {isAdmin ? <UserCheck className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-              {isAdmin ? "Admin SDN 1 Palapa" : "Mode Publik"}
-            </span>
+            {isAdmin && (
+              <Button size="sm" variant="glass" onClick={() => setReportOpen(true)}>
+                <Printer /> <span className="hidden sm:inline">Cetak Laporan</span>
+              </Button>
+            )}
             {isAdmin && (
               <Button size="sm" variant="glass" onClick={() => setSettingsOpen(true)}>
                 <Settings /> <span className="hidden sm:inline">Pengaturan</span>
