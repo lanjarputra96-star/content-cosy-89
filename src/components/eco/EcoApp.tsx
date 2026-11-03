@@ -91,6 +91,10 @@ export function EcoApp() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1.5 text-xs font-medium sm:inline-flex">
+              {isAdmin ? <UserCheck className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+              {isAdmin ? "Admin SDN 1 Palapa" : "Mode Publik"}
+            </span>
             {isAdmin && (
               <Button size="sm" variant="glass" onClick={() => setReportOpen(true)}>
                 <Printer /> <span className="hidden sm:inline">Cetak Laporan</span>
@@ -302,6 +306,7 @@ export function EcoApp() {
         />
       )}
       {plantDetail && <PlantDetail plant={plantDetail} baseUrl={data.site.qrBaseUrl} onClose={() => setPlantDetail(null)} />}
+      {reportOpen && <ReportModal data={data} onClose={() => setReportOpen(false)} />}
     </div>
   );
 }
@@ -537,6 +542,9 @@ function SectionTab({ kind, section, isAdmin, onEditHead, onAdd, onEdit, onDelet
                   <span className="rounded bg-leaf px-2 py-0.5 text-[10px] font-medium text-leaf-foreground">{it.infoValue}</span>
                 </div>
               )}
+              <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                <CalendarDays className="h-3 w-3 text-leaf" /> Dicatat: {it.date ? fmtID(it.date) : "tanpa tanggal"}
+              </div>
             </div>
           </div>
         ))}
@@ -552,8 +560,9 @@ const itemLabels: Record<SectionKey, { label: string; value: string }> = {
 };
 
 function ItemModal({ kind, item, onClose, onSave }: { kind: SectionKey; item: SectionItem | null; onClose: () => void; onSave: (i: SectionItem) => void }) {
+  const today = new Date().toISOString().slice(0, 10);
   const [f, setF] = useState<SectionItem>(
-    item ?? { id: uid(), image: "", badge: "", title: "", desc: "", infoLabel: "", infoValue: "", tone: kind === "water" ? "sky" : "green" },
+    item ?? { id: uid(), date: today, image: "", badge: "", title: "", desc: "", infoLabel: "", infoValue: "", tone: kind === "water" ? "sky" : "green" },
   );
   const set = <K extends keyof SectionItem>(k: K, v: SectionItem[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
