@@ -572,6 +572,7 @@ function ItemModal({ kind, item, onClose, onSave }: { kind: SectionKey; item: Se
         <Field label="Judul *"><Input required value={f.title} onChange={(e) => set("title", e.target.value)} /></Field>
         <Field label="Deskripsi"><Textarea rows={3} value={f.desc} onChange={(e) => set("desc", e.target.value)} /></Field>
         <div className="grid grid-cols-2 gap-2">
+          <Field label="Tanggal pencatatan"><Input type="date" value={f.date ?? ""} onChange={(e) => set("date", e.target.value)} /></Field>
           <Field label="Label kecil / Kategori"><Input value={f.badge} onChange={(e) => set("badge", e.target.value)} /></Field>
           <Field label="Warna">
             <select className={selectCls} value={f.tone} onChange={(e) => set("tone", e.target.value as SectionItem["tone"])}>
