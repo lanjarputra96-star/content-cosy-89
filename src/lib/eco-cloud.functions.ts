@@ -79,7 +79,7 @@ export const saveEcoData = createServerFn({ method: "POST" })
       if (!data.data || typeof data.data !== "object") return { ok: false, error: "Data tidak valid." };
       const clean = (await replaceDataUrls(data.data)) as EcoData;
       const entries: Record<string, unknown> = { ...clean };
-      delete entries.credentials;
+      delete entries["credentials"];
       await saveEcoState(entries);
       return { ok: true, data: clean };
     } catch (error) {
