@@ -3,7 +3,7 @@
  * melalui connector gateway. Tidak boleh diimpor dari kode client.
  */
 
-const GATEWAY_BASE = (process.env.CONNECTOR_GATEWAY_BASE_URL ?? "https://connector-gateway.lovable.dev").replace(/\/$/, "");
+const GATEWAY_BASE = (process.env["CONNECTOR_GATEWAY_BASE_URL"] ?? "https://connector-gateway.lovable.dev").replace(/\/$/, "");
 const CF_API = `${GATEWAY_BASE}/cloudflare/client/v4`;
 const ACCOUNT_ID = "c29c172f6c6488512065c8efbd4fadc4";
 const DB_ID = "4cde2ee1-4e25-4762-a79b-b073f32e38f5";
@@ -108,7 +108,7 @@ function b64urlDecode(s: string): string {
 
 async function getAuthSecret(): Promise<Uint8Array> {
   const rows = await d1Query("SELECT v FROM state WHERE k = 'auth_secret'");
-  let secretB64 = rows[0]?.results?.[0]?.v as string | undefined;
+  let secretB64 = rows[0]?.results?.[0]?.["v"] as string | undefined;
   if (!secretB64) {
     secretB64 = bytesToBase64(crypto.getRandomValues(new Uint8Array(32)));
     await d1Query(
@@ -157,7 +157,7 @@ export async function getAdmin(username?: string): Promise<AdminRow | null> {
     : await d1Query("SELECT username, password_hash FROM admin_auth LIMIT 1");
   const r = rows[0]?.results?.[0];
   if (!r) return null;
-  return { username: String(r.username), passwordHash: String(r.password_hash) };
+  return { username: String(r["username"]), passwordHash: String(r["password_hash"]) };
 }
 
 export async function setAdmin(oldUsername: string, newUsername: string, passwordHash: string): Promise<void> {
@@ -174,7 +174,7 @@ export async function loadEcoState(): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   for (const row of rows[0]?.results ?? []) {
     try {
-      out[String(row.k)] = JSON.parse(String(row.v));
+      out[String(row["k"])] = JSON.parse(String(row["v"]));
     } catch {
       /* skip corrupt row */
     }
@@ -217,8 +217,8 @@ export async function readAsset(id: string): Promise<{ mime: string; bytes: Uint
   let b64 = "";
   let mime = "image/jpeg";
   for (const row of list) {
-    mime = String(row.mime ?? mime);
-    b64 += String(row.data ?? "");
+    mime = String(row["mime"] ?? mime);
+    b64 += String(row["data"] ?? "");
   }
   return { mime, bytes: base64ToBytes(b64) };
 }
