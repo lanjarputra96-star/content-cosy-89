@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { fileToDataUrl, type Tone } from "@/lib/eco-store";
+import { uploadAsset } from "@/lib/eco-cloud.functions";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 
 export const toneText: Record<Tone, string> = {
@@ -49,9 +51,10 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 export const selectCls =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
-export function ImageField({ label, value, onChange, maxW = 1400 }: {
-  label: string; value: string; onChange: (v: string) => void; maxW?: number;
+export function ImageField({ label, value, onChange, maxW = 1400, token }: {
+  label: string; value: string; onChange: (v: string) => void; maxW?: number; token: string | null;
 }) {
+  const uploadAssetFn = useServerFn(uploadAsset);
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const isData = value.startsWith("data:");
@@ -92,9 +95,13 @@ export function ImageField({ label, value, onChange, maxW = 1400 }: {
           if (!f) return;
           setBusy(true);
           try {
-            onChange(await fileToDataUrl(f, maxW));
+            if (!token) throw new Error("Silakan login kembali untuk mengunggah foto.");
+            const dataUrl = await fileToDataUrl(f, maxW);
+            const result = await uploadAssetFn({ data: { token, dataUrl } });
+            if (!result.ok) throw new Error(result.error);
+            onChange(result.url);
           } catch {
-            toast.error("Gagal membaca gambar");
+            toast.error("Foto gagal diunggah. Periksa koneksi dan coba lagi.");
           } finally {
             setBusy(false);
           }
