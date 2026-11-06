@@ -7,6 +7,7 @@ import {
   Sprout, Sun, Trash2, Trees, Upload, UserCheck, Users, Waves, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useServerFn } from "@tanstack/react-start";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,7 @@ import {
   type ReportRange, type ReportSelection,
 } from "@/lib/eco-report";
 import { Field, ImageField, Modal, selectCls, toneOptions, toneText } from "./fields";
+import { changeCredentials, checkSession } from "@/lib/eco-cloud.functions";
 
 type SectionKey = "waste" | "water" | "activities";
 type TabKey = "dashboard" | "plants" | SectionKey;
@@ -43,7 +45,10 @@ function EditChip({ onClick, label = "Edit", icon }: { onClick: () => void; labe
 }
 
 export function EcoApp() {
-  const { data, update, setData, reset } = useEcoStore();
+  const [adminToken, setAdminToken] = useState<string | null>(null);
+  const { data, update, setData, reset, ready, saving, syncError } = useEcoStore(adminToken);
+  const checkSessionFn = useServerFn(checkSession);
+  const changeCredentialsFn = useServerFn(changeCredentials);
   const [isAdmin, setIsAdmin] = useState(false);
   const [tab, setTab] = useState<TabKey>("dashboard");
 
@@ -59,15 +64,25 @@ export function EcoApp() {
   const [itemEdit, setItemEdit] = useState<{ key: SectionKey; item: SectionItem | null } | null>(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem("eco-admin") === "1") setIsAdmin(true);
-  }, []);
+    const token = sessionStorage.getItem("eco-admin-token");
+    if (!token) return;
+    void checkSessionFn({ data: { token } }).then((result) => {
+      if (result.ok) {
+        setAdminToken(token);
+        setIsAdmin(true);
+      } else {
+        sessionStorage.removeItem("eco-admin-token");
+      }
+    }).catch(() => sessionStorage.removeItem("eco-admin-token"));
+  }, [checkSessionFn]);
 
   const publishedCount = data.plants.filter((p) => p.isPublished).length;
 
   const logout = () => {
     if (!confirm("Keluar dari akun admin?")) return;
     setIsAdmin(false);
-    sessionStorage.removeItem("eco-admin");
+    setAdminToken(null);
+    sessionStorage.removeItem("eco-admin-token");
     toast("Anda keluar dari mode admin");
   };
 
@@ -106,6 +121,7 @@ export function EcoApp() {
                 <Settings /> <span className="hidden sm:inline">Pengaturan</span>
               </Button>
             )}
+            {isAdmin && <span className="hidden text-xs sm:inline" role={syncError ? "alert" : "status"}>{syncError ? "Belum tersimpan" : saving ? "Menyimpan…" : "Tersimpan di cloud"}</span>}
             {isAdmin ? (
               <Button size="sm" variant="hero" onClick={logout}><LogOut /> Logout</Button>
             ) : (
@@ -243,19 +259,29 @@ export function EcoApp() {
       <LoginModal
         open={loginOpen}
         onClose={() => setLoginOpen(false)}
-        creds={data.credentials}
-        onSuccess={() => {
+        onSuccess={(token, username) => {
+          setAdminToken(token);
           setIsAdmin(true);
-          sessionStorage.setItem("eco-admin", "1");
+          sessionStorage.setItem("eco-admin-token", token);
+          setData((current) => ({ ...current, credentials: { username, password: "" } }));
           setLoginOpen(false);
           toast.success("Berhasil login sebagai Administrator!");
         }}
       />
       {settingsOpen && (
-        <SettingsModal data={data} onClose={() => setSettingsOpen(false)} update={update} setData={setData} reset={reset} />
+        <SettingsModal data={data} onClose={() => setSettingsOpen(false)} update={update} setData={setData} reset={reset} onChangeCredentials={async (username, password) => {
+          if (!adminToken) return { ok: false as const, error: "Sesi admin berakhir. Silakan login kembali." };
+          const result = await changeCredentialsFn({ data: { token: adminToken, username, password } });
+          if (result.ok) {
+            sessionStorage.setItem("eco-admin-token", result.token);
+            setAdminToken(result.token);
+            setData((current) => ({ ...current, credentials: { username: result.username, password: "" } }));
+          }
+          return result;
+        }} />
       )}
       {coverOpen && (
-        <CoverModal site={data.site} onClose={() => setCoverOpen(false)} onSave={(site) => { update((d) => ({ ...d, site })); setCoverOpen(false); toast.success("Sampul diperbarui"); }} />
+        <CoverModal site={data.site} token={adminToken} onClose={() => setCoverOpen(false)} onSave={(site) => { update((d) => ({ ...d, site })); setCoverOpen(false); toast.success("Sampul diperbarui"); }} />
       )}
       {statEdit && (
         <StatModal stat={statEdit} onClose={() => setStatEdit(null)} onSave={(s) => { update((d) => ({ ...d, stats: d.stats.map((x) => (x.id === s.id ? s : x)) })); setStatEdit(null); toast.success("Statistik diperbarui"); }} />
@@ -275,6 +301,7 @@ export function EcoApp() {
         <ItemModal
           kind={itemEdit.key}
           item={itemEdit.item}
+          token={adminToken}
           onClose={() => setItemEdit(null)}
           onSave={(item) => {
             const key = itemEdit.key;
@@ -292,6 +319,7 @@ export function EcoApp() {
         <PlantModal
           plant={plantEdit === "new" ? null : plantEdit}
           data={data}
+          token={adminToken}
           onClose={() => setPlantEdit(null)}
           onSave={(p) => {
             if (plantEdit === "new") {
@@ -405,7 +433,7 @@ function PlantsTab({ data, isAdmin, onAdd, onEdit, onDetail, onToggle, onDelete,
   );
 }
 
-function PlantModal({ plant, data, onClose, onSave }: { plant: Plant | null; data: EcoData; onClose: () => void; onSave: (p: Plant) => void }) {
+function PlantModal({ plant, data, token, onClose, onSave }: { plant: Plant | null; data: EcoData; token: string | null; onClose: () => void; onSave: (p: Plant) => void }) {
   const [f, setF] = useState<Plant>(
     plant ?? {
       id: uid(), code: "", name: "", scientific: "", category: data.categories[0] ?? "", location: data.locations[0] ?? "",
@@ -443,7 +471,7 @@ function PlantModal({ plant, data, onClose, onSave }: { plant: Plant | null; dat
           </Field>
           <Field label="Jumlah"><Input type="number" min={1} value={f.quantity} onChange={(e) => set("quantity", Math.max(1, parseInt(e.target.value) || 1))} /></Field>
         </div>
-        <ImageField label="Foto Tanaman" value={f.photo} onChange={(v) => set("photo", v)} maxW={900} />
+        <ImageField label="Foto Tanaman" value={f.photo} onChange={(v) => set("photo", v)} maxW={900} token={token} />
         <Field label="Deskripsi & Ciri-Ciri *"><Textarea required rows={3} value={f.desc} onChange={(e) => set("desc", e.target.value)} /></Field>
         <Field label="Manfaat Tanaman"><Input value={f.benefits} onChange={(e) => set("benefits", e.target.value)} /></Field>
         <label className="flex items-center gap-2 text-xs">
@@ -560,7 +588,7 @@ const itemLabels: Record<SectionKey, { label: string; value: string }> = {
   activities: { label: "Jadwal (mis. Setiap Jumat 07.30)", value: "Status (mis. Aktif)" },
 };
 
-function ItemModal({ kind, item, onClose, onSave }: { kind: SectionKey; item: SectionItem | null; onClose: () => void; onSave: (i: SectionItem) => void }) {
+function ItemModal({ kind, item, token, onClose, onSave }: { kind: SectionKey; item: SectionItem | null; token: string | null; onClose: () => void; onSave: (i: SectionItem) => void }) {
   const today = new Date().toISOString().slice(0, 10);
   const [f, setF] = useState<SectionItem>(
     item ?? { id: uid(), date: today, image: "", badge: "", title: "", desc: "", infoLabel: "", infoValue: "", tone: kind === "water" ? "sky" : "green" },
@@ -569,7 +597,7 @@ function ItemModal({ kind, item, onClose, onSave }: { kind: SectionKey; item: Se
   return (
     <Modal open onClose={onClose} title={item ? "Edit Kartu" : "Tambah Kartu Baru"}>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
-        <ImageField label="Foto" value={f.image} onChange={(v) => set("image", v)} maxW={900} />
+        <ImageField label="Foto" value={f.image} onChange={(v) => set("image", v)} maxW={900} token={token} />
         <Field label="Judul *"><Input required value={f.title} onChange={(e) => set("title", e.target.value)} /></Field>
         <Field label="Deskripsi"><Textarea rows={3} value={f.desc} onChange={(e) => set("desc", e.target.value)} /></Field>
         <div className="grid grid-cols-2 gap-2">
@@ -608,13 +636,13 @@ function HeadModal({ initial, onClose, onSave }: { initial: { title: string; sub
 
 /* ---------------- Dashboard editors ---------------- */
 
-function CoverModal({ site, onClose, onSave }: { site: Site; onClose: () => void; onSave: (s: Site) => void }) {
+function CoverModal({ site, token, onClose, onSave }: { site: Site; token: string | null; onClose: () => void; onSave: (s: Site) => void }) {
   const [f, setF] = useState(site);
   const set = <K extends keyof Site>(k: K, v: Site[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
     <Modal open onClose={onClose} title="Edit Foto Sampul & Teks" wide>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
-        <ImageField label="Foto Sampul" value={f.coverImage} onChange={(v) => set("coverImage", v)} maxW={1800} />
+        <ImageField label="Foto Sampul" value={f.coverImage} onChange={(v) => set("coverImage", v)} maxW={1800} token={token} />
         <Field label="Label atas"><Input value={f.coverBadge} onChange={(e) => set("coverBadge", e.target.value)} /></Field>
         <Field label="Judul sampul"><Input required value={f.coverTitle} onChange={(e) => set("coverTitle", e.target.value)} /></Field>
         <Field label="Keterangan sampul"><Textarea rows={3} value={f.coverDesc} onChange={(e) => set("coverDesc", e.target.value)} /></Field>
@@ -655,26 +683,24 @@ function StatModal({ stat, onClose, onSave }: { stat: Stat; onClose: () => void;
 
 /* ---------------- Auth & settings ---------------- */
 
-function LoginModal({ open, onClose, creds, onSuccess }: { open: boolean; onClose: () => void; creds: EcoData["credentials"]; onSuccess: () => void }) {
+function LoginModal({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: (token: string, username: string) => void }) {
+  const loginAdminFn = useServerFn(loginAdmin);
   const [u, setU] = useState("");
   const [p, setP] = useState("");
-  const isDefault = creds.username === defaultData.credentials.username && creds.password === defaultData.credentials.password;
   return (
     <Modal open={open} onClose={onClose} title="Login Administrator" description="Masuk untuk mengelola data Eco School SDN 1 Palapa">
       <form
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (u === creds.username && p === creds.password) { setP(""); onSuccess(); }
-          else toast.error("Username atau password salah!");
+          const result = await loginAdminFn({ data: { username: u, password: p } });
+          if (result.ok) { setP(""); onSuccess(result.token, result.username); }
+          else toast.error(result.error);
         }}
       >
         <Field label="Username"><Input required value={u} onChange={(e) => setU(e.target.value)} autoComplete="username" /></Field>
         <Field label="Password"><Input required type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" /></Field>
         <Button type="submit" className="w-full">Masuk sebagai Admin</Button>
-        {isDefault && (
-          <p className="text-center text-[11px] text-muted-foreground">Default demo: username <strong>admin</strong> | password <strong>palapa2026</strong></p>
-        )}
       </form>
     </Modal>
   );
@@ -709,8 +735,9 @@ function ListEditor({ title, items, onChange }: { title: string; items: string[]
   );
 }
 
-function SettingsModal({ data, onClose, update, setData, reset }: {
+function SettingsModal({ data, onClose, update, setData, reset, onChangeCredentials }: {
   data: EcoData; onClose: () => void; update: (fn: (d: EcoData) => EcoData) => void; setData: (d: EcoData) => void; reset: () => void;
+  onChangeCredentials: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [site, setSite] = useState(data.site);
   const [user, setUser] = useState(data.credentials.username);
@@ -745,7 +772,8 @@ function SettingsModal({ data, onClose, update, setData, reset }: {
               e.preventDefault();
               if (pass.length < 6) { toast.error("Password minimal 6 karakter!"); return; }
               if (pass !== pass2) { toast.error("Konfirmasi password tidak sama"); return; }
-              update((d) => ({ ...d, credentials: { username: user.trim(), password: pass } }));
+              const result = await onChangeCredentials(user.trim(), pass);
+              if (!result.ok) { toast.error(result.error ?? "Kredensial gagal diperbarui."); return; }
               setPass(""); setPass2("");
               toast.success("Kredensial Admin berhasil diperbarui!");
             }}
@@ -764,7 +792,7 @@ function SettingsModal({ data, onClose, update, setData, reset }: {
         </TabsContent>
 
         <TabsContent value="data" className="space-y-3 pt-2 text-sm">
-          <p className="text-xs text-muted-foreground">Semua perubahan tersimpan di browser perangkat ini. Unduh cadangan untuk memindahkan data ke perangkat lain.</p>
+          <p className="text-xs text-muted-foreground">Data tersimpan di cloud dan dapat dibuka dari perangkat lain. Unduh cadangan sebagai salinan tambahan.</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={() => download(`cadangan-eco-school-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data), "application/json")}>
               <Download /> Unduh Cadangan

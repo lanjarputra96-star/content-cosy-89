@@ -3,8 +3,7 @@
  * melalui connector gateway. Tidak boleh diimpor dari kode client.
  */
 
-const GATEWAY_BASE = (process.env["CONNECTOR_GATEWAY_BASE_URL"] ?? "https://connector-gateway.lovable.dev").replace(/\/$/, "");
-const CF_API = `${GATEWAY_BASE}/cloudflare/client/v4`;
+const DEFAULT_GATEWAY_BASE = "https://connector-gateway.lovable.dev";
 const ACCOUNT_ID = "c29c172f6c6488512065c8efbd4fadc4";
 const DB_ID = "4cde2ee1-4e25-4762-a79b-b073f32e38f5";
 /** Satu pernyataan SQL D1 dibatasi ~100KB, jadi aset disimpan per potongan. */
@@ -23,7 +22,9 @@ export async function d1Query(sql: string, params: unknown[] = []): Promise<D1St
   const lovableKey = process.env["LOVABLE_API_KEY"];
   const cfKey = process.env["CLOUDFLARE_API_KEY"];
   if (!lovableKey || !cfKey) throw new Error("Missing Cloudflare connector credentials");
-  const res = await fetch(`${CF_API}/accounts/${ACCOUNT_ID}/d1/database/${DB_ID}/query`, {
+  const gatewayBase = (process.env["CONNECTOR_GATEWAY_BASE_URL"] ?? DEFAULT_GATEWAY_BASE).replace(/\/$/, "");
+  const cfApi = `${gatewayBase}/cloudflare/client/v4`;
+  const res = await fetch(`${cfApi}/accounts/${ACCOUNT_ID}/d1/database/${DB_ID}/query`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${lovableKey}`,
@@ -144,6 +145,14 @@ export async function verifyToken(token: string | undefined | null): Promise<str
   }
 }
 
+/** A token is valid only while its administrator account still exists. */
+export async function verifyAdminToken(token: string | undefined | null): Promise<string | null> {
+  const username = await verifyToken(token);
+  if (!username) return null;
+  const admin = await getAdmin(username);
+  return admin?.username ?? null;
+}
+
 /* ---------------- admin credentials ---------------- */
 
 export interface AdminRow {
@@ -170,7 +179,7 @@ export async function setAdmin(oldUsername: string, newUsername: string, passwor
 /* ---------------- application state ---------------- */
 
 export async function loadEcoState(): Promise<Record<string, unknown>> {
-  const rows = await d1Query("SELECT k, v FROM state");
+  const rows = await d1Query("SELECT k, v FROM state WHERE k != 'auth_secret'");
   const out: Record<string, unknown> = {};
   for (const row of rows[0]?.results ?? []) {
     try {

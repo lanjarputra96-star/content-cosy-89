@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { getEcoData, saveEcoData } from "@/lib/eco-cloud.functions";
 
 export type Tone = "green" | "amber" | "sky" | "rose";
 
@@ -142,37 +144,71 @@ export const defaultData: EcoData = {
       { id: "k3", date: "2026-10-30", image: u("photo-1517486808906-6ca8b3f04846"), badge: "Bulanan", title: "Klub Eco-Hero & Daur Ulang", desc: "Pelatihan kreatif mengubah sampah botol plastik menjadi pot tanaman gantung dan hiasan kelas.", infoLabel: "Setiap Akhir Bulan", infoValue: "Aktif", tone: "green" },
     ],
   },
-  credentials: { username: "admin", password: "palapa2026" },
+  credentials: { username: "admin", password: "" },
 };
 
-const KEY = "eco-green-school-v1";
-
-export function useEcoStore() {
+export function useEcoStore(adminToken: string | null = null) {
+  const getEcoDataFn = useServerFn(getEcoData);
+  const saveEcoDataFn = useServerFn(saveEcoData);
   const [data, setData] = useState<EcoData>(defaultData);
   const [ready, setReady] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const saveQueue = useState(() => ({ current: Promise.resolve() }))[0];
+  const saveVersion = useState(() => ({ current: 0 }))[0];
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setData({ ...defaultData, ...JSON.parse(raw) });
-    } catch {
-      /* ignore */
-    }
-    setReady(true);
-  }, []);
+    let active = true;
+    void getEcoDataFn()
+      .then((result) => {
+        if (!active) return;
+        if (!result.ok || !result.data) {
+          setSyncError(result.error ?? "Data belum dapat dimuat dari penyimpanan cloud.");
+          return;
+        }
+        setData({ ...defaultData, ...result.data, credentials: { username: result.data.credentials.username, password: "" } });
+        setSyncError(null);
+      })
+      .catch(() => {
+        if (active) setSyncError("Data belum dapat dimuat dari penyimpanan cloud.");
+      })
+      .finally(() => {
+        if (active) setReady(true);
+      });
+    return () => { active = false; };
+  }, [getEcoDataFn]);
 
   useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(KEY, JSON.stringify(data));
-    } catch {
-      alert("Penyimpanan browser penuh. Gunakan foto berukuran lebih kecil.");
-    }
-  }, [data, ready]);
+    if (!ready || !adminToken) return;
+    const version = ++saveVersion.current;
+    const timer = window.setTimeout(() => {
+      setSaving(true);
+      setSyncError(null);
+      const snapshot = data;
+      saveQueue.current = saveQueue.current
+        .catch(() => undefined)
+        .then(async () => {
+          const result = await saveEcoDataFn({ data: { token: adminToken, data: snapshot } });
+          if (version !== saveVersion.current) return;
+          if (!result.ok) setSyncError(result.error ?? "Perubahan belum tersimpan.");
+          else setSyncError(null);
+        })
+        .catch(() => {
+          if (version === saveVersion.current) setSyncError("Perubahan belum tersimpan. Periksa koneksi lalu coba lagi.");
+        })
+        .finally(() => {
+          if (version === saveVersion.current) setSaving(false);
+        });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [adminToken, data, ready, saveEcoDataFn, saveQueue, saveVersion]);
 
   const update = useCallback((fn: (d: EcoData) => EcoData) => setData((d) => fn(d)), []);
-  const reset = useCallback(() => setData(defaultData), []);
-  return { data, update, setData, reset, ready };
+  const reset = useCallback(() => setData((current) => ({
+    ...defaultData,
+    credentials: { username: current.credentials.username, password: "" },
+  })), []);
+  return { data, update, setData, reset, ready, saving, syncError };
 }
 
 export function nextPlantCode(n: number) {

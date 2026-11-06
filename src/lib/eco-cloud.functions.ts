@@ -9,8 +9,8 @@ import {
   saveEcoState,
   setAdmin,
   storeAssetFromBase64,
+  verifyAdminToken,
   verifyPassword,
-  verifyToken,
 } from "./eco-cloud.server";
 import { defaultData, type EcoData } from "@/lib/eco-store";
 
@@ -63,7 +63,7 @@ export const checkSession = createServerFn({ method: "POST" })
   .inputValidator((input: { token?: unknown }) => input)
   .handler(async ({ data }) => {
     try {
-      const username = await verifyToken(typeof data.token === "string" ? data.token : null);
+      const username = await verifyAdminToken(typeof data.token === "string" ? data.token : null);
       return username ? { ok: true, username } : { ok: false };
     } catch {
       return { ok: false };
@@ -74,7 +74,7 @@ export const saveEcoData = createServerFn({ method: "POST" })
   .inputValidator((input: { token?: unknown; data?: unknown }) => input)
   .handler(async ({ data }) => {
     try {
-      const username = await verifyToken(typeof data.token === "string" ? data.token : null);
+      const username = await verifyAdminToken(typeof data.token === "string" ? data.token : null);
       if (!username) return { ok: false, error: "Sesi admin berakhir. Silakan login kembali." };
       if (!data.data || typeof data.data !== "object") return { ok: false, error: "Data tidak valid." };
       const clean = (await replaceDataUrls(data.data)) as EcoData;
@@ -92,14 +92,15 @@ export const changeCredentials = createServerFn({ method: "POST" })
   .inputValidator((input: { token?: unknown; username?: unknown; password?: unknown }) => input)
   .handler(async ({ data }) => {
     try {
-      const current = await verifyToken(typeof data.token === "string" ? data.token : null);
+      const current = await verifyAdminToken(typeof data.token === "string" ? data.token : null);
       if (!current) return { ok: false, error: "Sesi admin berakhir. Silakan login kembali." };
       const username = typeof data.username === "string" ? data.username.trim() : "";
       const password = typeof data.password === "string" ? data.password : "";
       if (!username) return { ok: false, error: "Username tidak boleh kosong." };
-      if (password.length < 6) return { ok: false, error: "Password minimal 6 karakter!" };
+      if (username.length > 80) return { ok: false, error: "Username maksimal 80 karakter." };
+      if (password.length < 6 || password.length > 256) return { ok: false, error: "Password harus berisi 6–256 karakter." };
       await setAdmin(current, username, await hashPassword(password));
-      return { ok: true, username };
+      return { ok: true, username, token: await createToken(username) };
     } catch (error) {
       console.error("changeCredentials failed:", error);
       return { ok: false, error: error instanceof Error ? error.message : "Gagal memperbarui akun admin." };
@@ -110,10 +111,11 @@ export const uploadAsset = createServerFn({ method: "POST" })
   .inputValidator((input: { token?: unknown; dataUrl?: unknown }) => input)
   .handler(async ({ data }) => {
     try {
-      const username = await verifyToken(typeof data.token === "string" ? data.token : null);
+      const username = await verifyAdminToken(typeof data.token === "string" ? data.token : null);
       if (!username) return { ok: false, error: "Sesi admin berakhir. Silakan login kembali." };
       if (typeof data.dataUrl !== "string") return { ok: false, error: "Foto tidak valid." };
-      const m = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/.exec(data.dataUrl);
+      if (data.dataUrl.length > 2_000_000) return { ok: false, error: "Ukuran foto terlalu besar. Pilih foto yang lebih kecil." };
+      const m = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/i.exec(data.dataUrl);
       if (!m) return { ok: false, error: "Format foto tidak didukung." };
       return { ok: true, url: await storeAssetFromBase64(m[1]!, m[2]!) };
     } catch (error) {
